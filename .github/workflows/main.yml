@@ -29,28 +29,27 @@ jobs:
           cd PlutoIPTV
           npm install request jsontoxml moment fs-extra uuid
 
-      - name: Generar listas y EPG
+      - name: Generar archivos
         run: |
           cd PlutoIPTV
           node index.js
-          # Movemos los archivos generados a la raíz para que sean públicos
+          # Movemos y forzamos la actualización de la fecha de modificación
           mv epg.xml ../
           mv playlist.m3u ../
           mv playlist_hq.m3u ../
+          cd ..
+          touch epg.xml playlist.m3u playlist_hq.m3u
 
       - name: Sincronizar y subir cambios
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           
-          # Añadimos los archivos actualizados en la raíz
+          # Añadimos los archivos específicamente
           git add epg.xml playlist.m3u playlist_hq.m3u
           
-          # Verificamos si realmente hay cambios antes de hacer commit
-          if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "Actualización automática Colombia: $(date)"
-            # Usamos --force para sobreescribir cualquier conflicto y asegurar la subida
-            git push origin main --force
-          else
-            echo "No hay cambios nuevos en las listas."
-          fi
+          # Hacemos el commit. Si no hay cambios, el "|| exit 0" evita que la acción falle
+          git commit -m "Actualización EPG y Listas: $(date)" || exit 0
+          
+          # Forzamos la subida para evitar conflictos de historial
+          git push origin main --force
