@@ -10,7 +10,6 @@ const plutoIPTV = {
   grabJSON: function (callback) {
     console.log("[INFO] Grabbing EPG for Pluto TV Colombia...");
 
-    // Ventana de tiempo: 2 horas atrás y 8 hacia adelante
     const startTime = moment().subtract(2, 'hours').format("YYYY-MM-DDTHH:00:00.000Z");
     const stopTime = moment().add(8, 'hours').format("YYYY-MM-DDTHH:00:00.000Z");
 
@@ -18,11 +17,13 @@ const plutoIPTV = {
         start: startTime,
         stop: stopTime,
         region: "CO",
-        serverSideAds: "true",
-        advertisingId: uuid4(),
         appName: "web",
+        appVersion: "unknown",
         deviceType: "web",
-        sid: uuid4()
+        deviceMake: "chrome",
+        deviceModel: "chrome",
+        sid: uuid4(),
+        deviceId: uuid4()
     });
 
     const apiUrl = `https://api.pluto.tv/v2/channels?${params.toString()}`;
@@ -30,18 +31,14 @@ const plutoIPTV = {
     request({
       url: apiUrl,
       headers: { 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'X-Forwarded-For': '181.128.0.0' // IP simulada de Colombia
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        'X-Forwarded-For': '181.128.0.0'
       }
     }, function (err, res, raw) {
-      if (err) {
-        console.error("[ERROR] API inalcanzable:", err);
-        process.exit(1);
-      }
+      if (err) { process.exit(1); }
       try {
         callback(JSON.parse(raw));
       } catch (e) {
-        console.error("[ERROR] JSON inválido");
         process.exit(1);
       }
     });
@@ -49,49 +46,41 @@ const plutoIPTV = {
 };
 
 function processChannels(list) {
-  const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+  const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
   const imgBase = "https://images.pluto.tv";
   
-  let m3u8_normal = "#EXTM3U x-tvg-url=\"epg.xml\"\n\n";
-  let m3u8_hq = "#EXTM3U x-tvg-url=\"epg.xml\"\n\n";
+  let m3u8_normal = "#EXTM3U\n\n";
+  let m3u8_hq = "#EXTM3U\n\n";
   let tv = [];
 
   list.forEach((channel) => {
-    // Filtramos canales basura
     if (channel.isStitched && !channel.slug.match(/^announcement|^privacy-policy/)) {
       
-      const idSincro = channel.slug; // ID único para vincular M3U con XML
+      const idSincro = channel.slug;
       let rawUrl = channel.stitched.urls[0].url;
-      let logoPath = channel.colorLogoPNG ? channel.colorLogoPNG.path : "";
-      let finalLogo = logoPath.startsWith("http") ? logoPath : `${imgBase}${logoPath}`;
-      let category = channel.category || "Pluto TV";
+      let finalLogo = channel.colorLogoPNG.path.startsWith("http") ? channel.colorLogoPNG.path : `${imgBase}${channel.colorLogoPNG.path}`;
 
-      // --- M3U NORMAL ---
-      let urlN = new URL(rawUrl);
-      urlN.searchParams.set("region", "CO");
-      urlN.searchParams.set("sid", uuid4());
-      m3u8_normal += `#EXTINF:0 tvg-id="${idSincro}" tvg-logo="${finalLogo}" group-title="${category}", ${channel.name}\n`;
-      m3u8_normal += `${urlN.toString()}|User-Agent=${encodeURIComponent(ua)}\n\n`;
+      // --- URL LIMPIA PARA MÁXIMA COMPATIBILIDAD ---
+      // Eliminamos parámetros extra que pueden romper el stream
+      let urlObj = new URL(rawUrl);
+      urlObj.searchParams.set("appName", "web");
+      urlObj.searchParams.set("deviceMake", "chrome");
+      urlObj.searchParams.set("sid", uuid4());
+      urlObj.searchParams.set("deviceId", uuid4());
 
-      // --- M3U HQ ---
-      let urlH = new URL(rawUrl);
-      urlH.searchParams.set("region", "CO");
-      urlH.searchParams.set("bandwidth", "10000000");
-      urlH.searchParams.set("maxVideoHeight", "1080");
-      m3u8_hq += `#EXTINF:0 tvg-id="${idSincro}" tvg-logo="${finalLogo}" group-title="${category}", ${channel.name} (HQ)\n`;
-      m3u8_hq += `${urlH.toString()}|User-Agent=${encodeURIComponent(ua)}\n\n`;
+      m3u8_normal += `#EXTINF:0 tvg-id="${idSincro}" tvg-logo="${finalLogo}" group-title="${channel.category}", ${channel.name}\n`;
+      m3u8_normal += `${urlObj.toString()}\n\n`;
 
-      // --- XMLTV CANAL ---
+      m3u8_hq += `#EXTINF:0 tvg-id="${idSincro}" tvg-logo="${finalLogo}" group-title="${channel.category}", ${channel.name} (HQ)\n`;
+      m3u8_hq += `${urlObj.toString()}&bandwidth=10000000\n\n`;
+
+      // --- EPG ---
       tv.push({
         name: "channel", attrs: { id: idSincro },
-        children: [
-          { name: "display-name", text: channel.name },
-          { name: "icon", attrs: { src: finalLogo } }
-        ]
+        children: [{ name: "display-name", text: channel.name }, { name: "icon", attrs: { src: finalLogo } }]
       });
 
-      // --- XMLTV PROGRAMAS ---
-      if (channel.timelines && channel.timelines.length > 0) {
+      if (channel.timelines) {
         channel.timelines.forEach((prog) => {
           tv.push({
             name: "programme",
@@ -110,12 +99,10 @@ function processChannels(list) {
     }
   });
 
-  // Guardado local
   fs.writeFileSync("epg.xml", j2x({ tv }, { prettyPrint: true, escape: true }));
   fs.writeFileSync("playlist.m3u", m3u8_normal);
   fs.writeFileSync("playlist_hq.m3u", m3u8_hq);
-  
-  console.log(`[SUCCESS] Canales: ${list.length} | Programas: ${tv.filter(x => x.name === 'programme').length}`);
+  console.log("Generado con éxito.");
 }
 
 plutoIPTV.grabJSON(processChannels);
