@@ -298,36 +298,38 @@ const plutoIPTV = {
     let channelsList = {};
     Promise.all(promises).then((results) => {
       results.forEach((channels) => {
+        // Verificamos que channels sea un array antes de procesar
+        if (!Array.isArray(channels)) return;
+
         channels.forEach((channel) => {
-          foundChannel = channelsList[channel._id];
+          if (!channel || !channel._id) return;
+
+          let foundChannel = channelsList[channel._id];
 
           if (!foundChannel) {
             channelsList[channel._id] = channel;
-            foundChannel = channel;
-          } else {
-            foundChannel.timelines = foundChannel.timelines.concat(
-              channel.timelines
-            );
+            // Si no tiene timelines, le creamos un array vacío para que no falle el concat
+            if (!channelsList[channel._id].timelines) {
+                channelsList[channel._id].timelines = [];
+            }
+          } else if (channel.timelines && Array.isArray(channel.timelines)) {
+            // Solo hacemos concat si ambos existen y son arrays
+            foundChannel.timelines = (foundChannel.timelines || []).concat(channel.timelines);
           }
         });
       });
 
-      fullChannels = Object.values(channelsList);
-      sortedChannels = fullChannels.sort(
+      let fullChannels = Object.values(channelsList);
+      let sortedChannels = fullChannels.sort(
         ({ number: a }, { number: b }) => a - b
       );
-      console.log("[DEBUG] Using api.pluto.tv, writing cache.json.");
+      
+      console.log("[DEBUG] Channels processed successfully.");
       fs.writeFileSync("cache.json", JSON.stringify(sortedChannels));
       callback(sortedChannels);
       return;
     })
-    .catch((err) => {
-      console.error(err);
-      process.exit(1);
-    });
-  },
-};
-
+    
 module.exports = plutoIPTV;
 
 function processChannels(version, list) {
