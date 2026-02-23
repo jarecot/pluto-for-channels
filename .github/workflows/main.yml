@@ -36,15 +36,22 @@ jobs:
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           
-          # Traer cambios remotos para evitar el error "rejected"
+          # Guardamos los archivos generados temporalmente en el 'stash'
+          git add .
+          git stash
+          
+          # Traemos los cambios del repo (el pull)
           git pull origin main --rebase
           
+          # Recuperamos nuestros archivos generados
+          git stash pop || echo "No había cambios en el stash o conflicto resuelto"
+          
+          # Añadimos y subimos
           git add playlist.m3u playlist_hq.m3u epg.xml
           
-          # Solo hacer commit si hay algo nuevo
           if [ -n "$(git status --porcelain)" ]; then
             git commit -m "Listas y EPG actualizados: $(date)"
             git push origin main
           else
-            echo "No hay cambios detectados para subir."
+            echo "Sin cambios para subir."
           fi
