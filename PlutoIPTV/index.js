@@ -81,17 +81,20 @@ function processChannels(list) {
     channels.push(channel);
   });
 
-  ///////////////////
+///////////////////
   // M3U8 Playlist //
   ///////////////////
   let m3u8 = "#EXTM3U\n\n";
+  // Definimos el User-Agent que queremos forzar
+  const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
   channels.forEach((channel) => {
     if (channel.isStitched && !channel.slug.match(/^announcement|^privacy-policy/)) {
       
-      // PARCHE DE REPRODUCCIÓN: Formateo correcto de parámetros de sesión
       let rawUrl = channel.stitched.urls[0].url;
       let finalUrl = new URL(rawUrl);
       
+      // ... (mantén los set de searchParams igual que antes)
       finalUrl.searchParams.set("advertisingId", "");
       finalUrl.searchParams.set("appName", "web");
       finalUrl.searchParams.set("appVersion", "unknown");
@@ -106,7 +109,14 @@ function processChannels(list) {
       let group = channel.category || "Pluto TV";
       let name = channel.name;
       
-      m3u8 += `#EXTINF:0 channel-id="${channel.slug}" tvg-logo="${logo}" group-title="${group}", ${name}\n${finalUrl.toString()}\n\n`;
+      // TRUCO: Agregamos el User-Agent directamente en la línea del canal
+      // Formato compatible con la mayoría de apps modernas: URL|User-Agent=...
+      const streamLink = `${finalUrl.toString()}|User-Agent=${encodeURIComponent(ua)}`;
+      
+      // Opción adicional para VLC y apps estrictas: #EXTVLCOPT
+      m3u8 += `#EXTINF:0 channel-id="${channel.slug}" tvg-logo="${logo}" group-title="${group}", ${name}\n`;
+      m3u8 += `#EXTVLCOPT:http-user-agent=${ua}\n`;
+      m3u8 += `${streamLink}\n\n`;
     }
   });
 
