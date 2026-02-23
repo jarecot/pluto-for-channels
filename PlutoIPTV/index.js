@@ -289,7 +289,7 @@ const plutoIPTV = {
         timeRange[1].format("YYYY-MM-DD HH:00:00.000ZZ")
       );
 
-      let url = `https://api.pluto.tv/v2/channels?start=${startTime}&stop=${stopTime}&country=CO&language=es&appName=web&deviceMake=web&deviceType=web&deviceID=web`;
+      let url = `https://floral-salad-5e9d.zinhoflix.workers.dev/`;
       console.log(url);
 
       promises.push(requestWithRetry(url));
