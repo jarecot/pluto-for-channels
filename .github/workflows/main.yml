@@ -31,17 +31,11 @@ jobs:
           cd PlutoIPTV
           node index.js
 
-      - name: Mover archivos a la raíz (Opcional)
-        run: |
-          # Esto mueve los archivos generados a la raíz para que el link sea más corto
-          mv PlutoIPTV/playlist.m3u .
-          mv PlutoIPTV/playlist_hq.m3u .
-          mv PlutoIPTV/epg.xml .
-
       - name: Subir cambios al repositorio
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-          git add playlist.m3u playlist_hq.m3u epg.xml PlutoIPTV/
+          # Agregamos todo lo que haya cambiado
+          git add .
           git commit -m "Listas y EPG actualizados: $(date)" || echo "No hay cambios para subir"
           git push
