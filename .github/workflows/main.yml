@@ -2,11 +2,11 @@ name: Actualizador PlutoIPTV
 
 on:
   schedule:
-    - cron: '0 */3 * * *' # Se ejecuta automáticamente cada 3 horas
-  workflow_dispatch:      # Activa el botón "Run workflow" manual
+    - cron: '0 */3 * * *'
+  workflow_dispatch:
   push:
     branches:
-      - main              # Se ejecuta si haces cambios en el código
+      - main
 
 jobs:
   build:
@@ -23,15 +23,25 @@ jobs:
 
       - name: Instalar dependencias
         run: |
+          cd PlutoIPTV
           npm install request jsontoxml moment fs-extra uuid
 
       - name: Generar listas y EPG
-        run: node index.js
+        run: |
+          cd PlutoIPTV
+          node index.js
+
+      - name: Mover archivos a la raíz (Opcional)
+        run: |
+          # Esto mueve los archivos generados a la raíz para que el link sea más corto
+          mv PlutoIPTV/playlist.m3u .
+          mv PlutoIPTV/playlist_hq.m3u .
+          mv PlutoIPTV/epg.xml .
 
       - name: Subir cambios al repositorio
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-          git add playlist.m3u playlist_hq.m3u epg.xml
+          git add playlist.m3u playlist_hq.m3u epg.xml PlutoIPTV/
           git commit -m "Listas y EPG actualizados: $(date)" || echo "No hay cambios para subir"
           git push
