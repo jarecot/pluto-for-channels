@@ -4,11 +4,11 @@
   "description": "pluto.tv to XMLTV & M3U converter",
   "main": "index.js",
   "dependencies": {
-    "fs-extra": "^9.0.0",
+    "fs-extra": "^9.1.0",
     "jsontoxml": "^1.0.1",
-    "moment": "^2.24.0",
+    "moment": "^2.30.1",
     "request": "^2.88.2",
-    "uuid": "^7.0.2"
+    "uuid": "^7.0.3"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
