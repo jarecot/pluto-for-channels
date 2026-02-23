@@ -4,41 +4,22 @@ const request = require("request");
 const j2x = require("jsontoxml");
 const moment = require("moment");
 const fs = require("fs-extra");
-const uuid4 = require("uuid").v4;
 
 const plutoIPTV = {
   grabJSON: function (callback) {
-    console.log("[INFO] Grabbing EPG for Pluto TV Colombia...");
-
-    const startTime = moment().subtract(2, 'hours').format("YYYY-MM-DDTHH:00:00.000Z");
-    const stopTime = moment().add(8, 'hours').format("YYYY-MM-DDTHH:00:00.000Z");
-
-    const params = new URLSearchParams({
-        start: startTime,
-        stop: stopTime,
-        region: "CO",
-        appName: "web",
-        appVersion: "unknown",
-        deviceType: "web",
-        deviceMake: "chrome",
-        deviceModel: "chrome",
-        sid: uuid4(),
-        deviceId: uuid4()
-    });
-
-    const apiUrl = `https://api.pluto.tv/v2/channels?${params.toString()}`;
+    console.log("[INFO] Grabbing data via Worker for Colombia...");
+    // Usamos el worker que ya sabemos que nos da acceso a los links funcionales
+    const workerUrl = `https://floral-salad-5e9d.zinhoflix.workers.dev/`;
 
     request({
-      url: apiUrl,
-      headers: { 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-        'X-Forwarded-For': '181.128.0.0'
-      }
+      url: workerUrl,
+      headers: { 'User-Agent': 'Mozilla/5.0' }
     }, function (err, res, raw) {
-      if (err) { process.exit(1); }
+      if (err) { console.error("Error en worker"); process.exit(1); }
       try {
         callback(JSON.parse(raw));
       } catch (e) {
+        console.error("Respuesta del worker no es JSON");
         process.exit(1);
       }
     });
@@ -46,9 +27,7 @@ const plutoIPTV = {
 };
 
 function processChannels(list) {
-  const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
   const imgBase = "https://images.pluto.tv";
-  
   let m3u8_normal = "#EXTM3U\n\n";
   let m3u8_hq = "#EXTM3U\n\n";
   let tv = [];
@@ -58,21 +37,15 @@ function processChannels(list) {
       
       const idSincro = channel.slug;
       let rawUrl = channel.stitched.urls[0].url;
-      let finalLogo = channel.colorLogoPNG.path.startsWith("http") ? channel.colorLogoPNG.path : `${imgBase}${channel.colorLogoPNG.path}`;
+      let logoPath = channel.colorLogoPNG ? channel.colorLogoPNG.path : "";
+      let finalLogo = logoPath.startsWith("http") ? logoPath : `${imgBase}${logoPath}`;
 
-      // --- URL LIMPIA PARA MÁXIMA COMPATIBILIDAD ---
-      // Eliminamos parámetros extra que pueden romper el stream
-      let urlObj = new URL(rawUrl);
-      urlObj.searchParams.set("appName", "web");
-      urlObj.searchParams.set("deviceMake", "chrome");
-      urlObj.searchParams.set("sid", uuid4());
-      urlObj.searchParams.set("deviceId", uuid4());
-
+      // --- URL LIMPIA (Sin parámetros extra que rompan el stream) ---
       m3u8_normal += `#EXTINF:0 tvg-id="${idSincro}" tvg-logo="${finalLogo}" group-title="${channel.category}", ${channel.name}\n`;
-      m3u8_normal += `${urlObj.toString()}\n\n`;
+      m3u8_normal += `${rawUrl}\n\n`;
 
       m3u8_hq += `#EXTINF:0 tvg-id="${idSincro}" tvg-logo="${finalLogo}" group-title="${channel.category}", ${channel.name} (HQ)\n`;
-      m3u8_hq += `${urlObj.toString()}&bandwidth=10000000\n\n`;
+      m3u8_hq += `${rawUrl}\n\n`;
 
       // --- EPG ---
       tv.push({
@@ -102,7 +75,7 @@ function processChannels(list) {
   fs.writeFileSync("epg.xml", j2x({ tv }, { prettyPrint: true, escape: true }));
   fs.writeFileSync("playlist.m3u", m3u8_normal);
   fs.writeFileSync("playlist_hq.m3u", m3u8_hq);
-  console.log("Generado con éxito.");
+  console.log("¡Archivos generados con éxito!");
 }
 
 plutoIPTV.grabJSON(processChannels);
