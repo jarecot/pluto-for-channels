@@ -6,16 +6,12 @@ const moment = require("moment");
 const fs = require("fs-extra");
 const uuid4 = require("uuid").v4;
 const uuid1 = require("uuid").v1;
-const url = require("url");
-
-const conflictingChannels = ["cnn", "dabl", "heartland", "newsy", "buzzr"];
 
 const plutoIPTV = {
   grabJSON: function (callback) {
     callback = callback || function () {};
     console.log("[INFO] Grabbing EPG...");
 
-    let startMoment = moment();
     const MAX_RETRIES = 3;
     const RETRY_DELAY = 10000;
 
@@ -44,8 +40,8 @@ const plutoIPTV = {
     }
 
     let promises = [];
+    // Hacemos 4 peticiones para cubrir rangos de tiempo de la guía
     for (let i = 0; i < 4; i++) {
-      // USAMOS TU URL DE CLOUDFLARE
       let workerUrl = `https://floral-salad-5e9d.zinhoflix.workers.dev/`;
       promises.push(requestWithRetry(workerUrl));
     }
@@ -76,7 +72,7 @@ const plutoIPTV = {
   },
 };
 
-function processChannels(version, list) {
+function processChannels(list) {
   let seenChannels = {};
   let channels = [];
   list.forEach((channel) => {
@@ -85,17 +81,38 @@ function processChannels(version, list) {
     channels.push(channel);
   });
 
+  ///////////////////
+  // M3U8 Playlist //
+  ///////////////////
   let m3u8 = "#EXTM3U\n\n";
   channels.forEach((channel) => {
     if (channel.isStitched && !channel.slug.match(/^announcement|^privacy-policy/)) {
-      let m3uUrl = channel.stitched.urls[0].url + "&country=CO&language=es&deviceId=" + uuid1() + "&sid=" + uuid4();
+      
+      // PARCHE DE REPRODUCCIÓN: Formateo correcto de parámetros de sesión
+      let rawUrl = channel.stitched.urls[0].url;
+      let finalUrl = new URL(rawUrl);
+      
+      finalUrl.searchParams.set("advertisingId", "");
+      finalUrl.searchParams.set("appName", "web");
+      finalUrl.searchParams.set("appVersion", "unknown");
+      finalUrl.searchParams.set("deviceId", uuid1());
+      finalUrl.searchParams.set("deviceMake", "web");
+      finalUrl.searchParams.set("deviceModel", "web");
+      finalUrl.searchParams.set("deviceType", "web");
+      finalUrl.searchParams.set("sid", uuid4());
+      finalUrl.searchParams.set("serverSideAds", "true");
+
       let logo = channel.colorLogoPNG ? channel.colorLogoPNG.path : "";
       let group = channel.category || "Pluto TV";
       let name = channel.name;
-      m3u8 += `#EXTINF:0 channel-id="${channel.slug}" tvg-logo="${logo}" group-title="${group}", ${name}\n${m3uUrl}\n\n`;
+      
+      m3u8 += `#EXTINF:0 channel-id="${channel.slug}" tvg-logo="${logo}" group-title="${group}", ${name}\n${finalUrl.toString()}\n\n`;
     }
   });
 
+  ///////////////////
+  // XMLTV Guide   //
+  ///////////////////
   let tv = [];
   channels.forEach((channel) => {
     tv.push({
@@ -131,5 +148,5 @@ function processChannels(version, list) {
 }
 
 plutoIPTV.grabJSON(function (channels) {
-  processChannels("main", channels);
+  processChannels(channels);
 });
