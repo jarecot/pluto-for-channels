@@ -1,25 +1,28 @@
-name: Actualizador PlutoIPTV
+name: Actualizador PlutoIPTV Colombia
 
 on:
   schedule:
-    - cron: '0 */3 * * *'
-  workflow_dispatch:
+    - cron: '0 */3 * * *' # Se ejecuta cada 3 horas
+  workflow_dispatch:      # Permite ejecutarlo manualmente desde la pestaña Actions
   push:
-    branches:
-      - main
+    branches: [ main ]    # Se ejecuta al hacer cambios en la rama main
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write     # Permiso crucial para que la Action pueda subir archivos
 
     steps:
-      - name: Checkout del código
-        uses: actions/checkout@v3
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Trae todo el historial para evitar conflictos de git
 
       - name: Configurar Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
       - name: Instalar dependencias
         run: |
@@ -30,28 +33,24 @@ jobs:
         run: |
           cd PlutoIPTV
           node index.js
+          # Movemos los archivos generados a la raíz para que sean públicos
+          mv epg.xml ../
+          mv playlist.m3u ../
+          mv playlist_hq.m3u ../
 
-      - name: Subir cambios al repositorio
+      - name: Sincronizar y subir cambios
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           
-          # Guardamos los archivos generados temporalmente en el 'stash'
-          git add .
-          git stash
+          # Añadimos los archivos actualizados en la raíz
+          git add epg.xml playlist.m3u playlist_hq.m3u
           
-          # Traemos los cambios del repo (el pull)
-          git pull origin main --rebase
-          
-          # Recuperamos nuestros archivos generados
-          git stash pop || echo "No había cambios en el stash o conflicto resuelto"
-          
-          # Añadimos y subimos
-          git add playlist.m3u playlist_hq.m3u epg.xml
-          
+          # Verificamos si realmente hay cambios antes de hacer commit
           if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "Listas y EPG actualizados: $(date)"
-            git push origin main
+            git commit -m "Actualización automática Colombia: $(date)"
+            # Usamos --force para sobreescribir cualquier conflicto y asegurar la subida
+            git push origin main --force
           else
-            echo "Sin cambios para subir."
+            echo "No hay cambios nuevos en las listas."
           fi
