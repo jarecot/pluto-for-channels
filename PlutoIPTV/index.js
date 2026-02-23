@@ -160,3 +160,9 @@ function processChannels(list) {
 plutoIPTV.grabJSON(function (channels) {
   processChannels(channels);
 });
+
+// Cambia estas líneas al final de tu proceso en index.js
+  fs.writeFileSync("../epg.xml", j2x({ tv }, { prettyPrint: true, escape: true }));
+  fs.writeFileSync("../playlist.m3u", m3u8_normal);
+  fs.writeFileSync("../playlist_hq.m3u", m3u8_hq);
+  console.log(`[SUCCESS] Files generated in root!`);
