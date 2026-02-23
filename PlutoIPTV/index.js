@@ -7,19 +7,19 @@ const fs = require("fs-extra");
 
 const plutoIPTV = {
   grabJSON: function (callback) {
-    console.log("[INFO] Grabbing data via Worker for Colombia...");
-    // Usamos el worker que ya sabemos que nos da acceso a los links funcionales
+    console.log("[INFO] Fetching channels via Worker...");
+    // Usamos el worker para obtener la estructura de canales y programas
     const workerUrl = `https://floral-salad-5e9d.zinhoflix.workers.dev/`;
 
     request({
       url: workerUrl,
       headers: { 'User-Agent': 'Mozilla/5.0' }
     }, function (err, res, raw) {
-      if (err) { console.error("Error en worker"); process.exit(1); }
+      if (err) { console.error("Error conectando al Worker"); process.exit(1); }
       try {
         callback(JSON.parse(raw));
       } catch (e) {
-        console.error("Respuesta del worker no es JSON");
+        console.error("El Worker no devolvió JSON válido");
         process.exit(1);
       }
     });
@@ -29,23 +29,22 @@ const plutoIPTV = {
 function processChannels(list) {
   const imgBase = "https://images.pluto.tv";
   let m3u8_normal = "#EXTM3U\n\n";
-  let m3u8_hq = "#EXTM3U\n\n";
   let tv = [];
 
   list.forEach((channel) => {
     if (channel.isStitched && !channel.slug.match(/^announcement|^privacy-policy/)) {
       
       const idSincro = channel.slug;
-      let rawUrl = channel.stitched.urls[0].url;
       let logoPath = channel.colorLogoPNG ? channel.colorLogoPNG.path : "";
       let finalLogo = logoPath.startsWith("http") ? logoPath : `${imgBase}${logoPath}`;
 
-      // --- URL LIMPIA (Sin parámetros extra que rompan el stream) ---
-      m3u8_normal += `#EXTINF:0 tvg-id="${idSincro}" tvg-logo="${finalLogo}" group-title="${channel.category}", ${channel.name}\n`;
-      m3u8_normal += `${rawUrl}\n\n`;
+      // --- CONSTRUCCIÓN DE URL UNIVERSAL ---
+      // En lugar de usar el link con tokens de GitHub, usamos el endpoint directo.
+      // Esto obliga a tu reproductor (VLC/IPTVnator) a pedir su propio token.
+      const directUrl = `http://stitcher.pluto.tv/stitch/hls/channel/${channel._id}/master.m3u8?advertisingId=&appName=web&appVersion=unknown&appStoreUrl=&architecture=&buildVersion=&clientDeviceType=0&deviceDNT=0&deviceId=${idSincro}&deviceMake=web&deviceModel=web&deviceType=web&deviceVersion=unknown&sid=${idSincro}&marketingName=web&sessionID=${idSincro}`;
 
-      m3u8_hq += `#EXTINF:0 tvg-id="${idSincro}" tvg-logo="${finalLogo}" group-title="${channel.category}", ${channel.name} (HQ)\n`;
-      m3u8_hq += `${rawUrl}\n\n`;
+      m3u8_normal += `#EXTINF:0 tvg-id="${idSincro}" tvg-logo="${finalLogo}" group-title="${channel.category}", ${channel.name}\n`;
+      m3u8_normal += `${directUrl}\n\n`;
 
       // --- EPG ---
       tv.push({
@@ -74,8 +73,9 @@ function processChannels(list) {
 
   fs.writeFileSync("epg.xml", j2x({ tv }, { prettyPrint: true, escape: true }));
   fs.writeFileSync("playlist.m3u", m3u8_normal);
-  fs.writeFileSync("playlist_hq.m3u", m3u8_hq);
-  console.log("¡Archivos generados con éxito!");
+  fs.writeFileSync("playlist_hq.m3u", m3u8_normal); // Usamos la misma lógica para ambos por ahora para asegurar estabilidad
+  
+  console.log(`[SUCCESS] Generado: ${list.length} canales.`);
 }
 
 plutoIPTV.grabJSON(processChannels);
