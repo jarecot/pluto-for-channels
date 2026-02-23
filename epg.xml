@@ -6451,8 +6451,8 @@
 
 	</programme>
 	<programme start="20260224030000 +0000" stop="20260224033000 +0000" channel="cbs-news-ptv1">
-			<title lang="es">CBS News</title>
-			<desc lang="es">no info available</desc>
+			<title lang="es">CBS Evening News</title>
+			<desc lang="es">The CBS Evening News team shares the day&apos;s stories, delivering context and depth to bring greater understanding to the world.</desc>
 
 	</programme>
 	<programme start="20260224033000 +0000" stop="20260224040000 +0000" channel="cbs-news-ptv1">
@@ -6461,8 +6461,8 @@
 
 	</programme>
 	<programme start="20260224040000 +0000" stop="20260224043000 +0000" channel="cbs-news-ptv1">
-			<title lang="es">CBS News</title>
-			<desc lang="es">no info available</desc>
+			<title lang="es">CBS Evening News</title>
+			<desc lang="es">The CBS Evening News team shares the day&apos;s stories, delivering context and depth to bring greater understanding to the world.</desc>
 
 	</programme>
 	<programme start="20260224043000 +0000" stop="20260224050000 +0000" channel="cbs-news-ptv1">
@@ -6476,8 +6476,13 @@
 
 	</programme>
 	<programme start="20260224060000 +0000" stop="20260224070000 +0000" channel="cbs-news-ptv1">
-			<title lang="es">CBS News</title>
-			<desc lang="es">no info available</desc>
+			<title lang="es">CBS News Roundup</title>
+			<desc lang="es">The headlines one needs to know overnight... plus, a roundup of MoneyWatch, health, consumer and up-to-the-minute technology news, the latest weather, and inspiring stories of kindness and hope.</desc>
+
+	</programme>
+	<programme start="20260224070000 +0000" stop="20260224080000 +0000" channel="cbs-news-ptv1">
+			<title lang="es">CBS News Roundup</title>
+			<desc lang="es">The headlines one needs to know overnight... plus, a roundup of MoneyWatch, health, consumer and up-to-the-minute technology news, the latest weather, and inspiring stories of kindness and hope.</desc>
 
 	</programme>
 	<channel id="pluto-tv-cine-crimen">
