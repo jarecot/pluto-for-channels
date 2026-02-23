@@ -1,8 +1,8 @@
 name: Actualizar Pluto Colombia
 on:
   schedule:
-    - cron: '0 */6 * * *'
-  workflow_dispatch:
+    - cron: '0 */6 * * *' # Se ejecuta cada 6 horas automáticamente
+  workflow_dispatch: # Esto activa el botón para probarlo ya mismo
 
 jobs:
   build:
@@ -20,13 +20,14 @@ jobs:
           cd PlutoIPTV
           npm install request jsontoxml moment fs-extra uuid
           node index.js
+          # Movemos los resultados a la raíz para que el link sea fácil
           mv playlist.m3u ../playlist.m3u
           mv epg.xml ../epg.xml
 
-      - name: Guardar Cambios
+      - name: Guardar en el Repo
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add playlist.m3u epg.xml
-          git commit -m "Lista Pluto CO actualizada $(date)" || exit 0
+          git commit -m "Lista CO actualizada desde Cloudflare" || exit 0
           git push
