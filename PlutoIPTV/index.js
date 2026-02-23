@@ -7,8 +7,7 @@ const fs = require("fs-extra");
 
 const plutoIPTV = {
   grabJSON: function (callback) {
-    console.log("[INFO] Fetching channels via Worker...");
-    // Usamos el worker para obtener la estructura de canales y programas
+    console.log("[INFO] Fetching channels and EPG data...");
     const workerUrl = `https://floral-salad-5e9d.zinhoflix.workers.dev/`;
 
     request({
@@ -28,38 +27,44 @@ const plutoIPTV = {
 
 function processChannels(list) {
   const imgBase = "https://images.pluto.tv";
-  let m3u8_normal = "#EXTM3U\n\n";
+  // IMPORTANTE: Definimos la URL del EPG en la cabecera del M3U
+  let m3u8_normal = "#EXTM3U x-tvg-url=\"epg.xml\"\n\n";
   let tv = [];
 
   list.forEach((channel) => {
     if (channel.isStitched && !channel.slug.match(/^announcement|^privacy-policy/)) {
       
-      const idSincro = channel.slug;
+      // Sincronización de IDs: Usamos el slug para que sea legible y único
+      const idSincro = channel.slug; 
       let logoPath = channel.colorLogoPNG ? channel.colorLogoPNG.path : "";
       let finalLogo = logoPath.startsWith("http") ? logoPath : `${imgBase}${logoPath}`;
 
-      // --- CONSTRUCCIÓN DE URL UNIVERSAL ---
-      // En lugar de usar el link con tokens de GitHub, usamos el endpoint directo.
-      // Esto obliga a tu reproductor (VLC/IPTVnator) a pedir su propio token.
+      // URL Directa que ya te funcionó
       const directUrl = `http://stitcher.pluto.tv/stitch/hls/channel/${channel._id}/master.m3u8?advertisingId=&appName=web&appVersion=unknown&appStoreUrl=&architecture=&buildVersion=&clientDeviceType=0&deviceDNT=0&deviceId=${idSincro}&deviceMake=web&deviceModel=web&deviceType=web&deviceVersion=unknown&sid=${idSincro}&marketingName=web&sessionID=${idSincro}`;
 
-      m3u8_normal += `#EXTINF:0 tvg-id="${idSincro}" tvg-logo="${finalLogo}" group-title="${channel.category}", ${channel.name}\n`;
+      // M3U: Añadimos tvg-id para vincular con el XML
+      m3u8_normal += `#EXTINF:0 tvg-id="${idSincro}" tvg-name="${channel.name}" tvg-logo="${finalLogo}" group-title="${channel.category}", ${channel.name}\n`;
       m3u8_normal += `${directUrl}\n\n`;
 
-      // --- EPG ---
+      // EPG: Canal
       tv.push({
         name: "channel", attrs: { id: idSincro },
-        children: [{ name: "display-name", text: channel.name }, { name: "icon", attrs: { src: finalLogo } }]
+        children: [
+          { name: "display-name", text: channel.name },
+          { name: "icon", attrs: { src: finalLogo } }
+        ]
       });
 
-      if (channel.timelines) {
+      // EPG: Programas
+      if (channel.timelines && Array.isArray(channel.timelines)) {
         channel.timelines.forEach((prog) => {
           tv.push({
             name: "programme",
             attrs: {
+              // El formato YYYYMMDDHHmmss ZZ es el estándar para IPTVnator
               start: moment(prog.start).format("YYYYMMDDHHmmss ZZ"),
               stop: moment(prog.stop).format("YYYYMMDDHHmmss ZZ"),
-              channel: idSincro
+              channel: idSincro // DEBE ser igual al id de 'channel' arriba
             },
             children: [
               { name: "title", attrs: { lang: "es" }, text: prog.title || "Sin título" },
@@ -71,11 +76,13 @@ function processChannels(list) {
     }
   });
 
+  // Guardado de archivos
   fs.writeFileSync("epg.xml", j2x({ tv }, { prettyPrint: true, escape: true }));
   fs.writeFileSync("playlist.m3u", m3u8_normal);
-  fs.writeFileSync("playlist_hq.m3u", m3u8_normal); // Usamos la misma lógica para ambos por ahora para asegurar estabilidad
+  fs.writeFileSync("playlist_hq.m3u", m3u8_normal);
   
-  console.log(`[SUCCESS] Generado: ${list.length} canales.`);
+  const totalProgs = tv.filter(item => item.name === "programme").length;
+  console.log(`[SUCCESS] Canales: ${list.length} | Programas: ${totalProgs}`);
 }
 
 plutoIPTV.grabJSON(processChannels);
