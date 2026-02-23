@@ -1,8 +1,8 @@
 name: Actualizar Pluto Colombia
 on:
   schedule:
-    - cron: '0 */6 * * *' # Se ejecuta cada 6 horas
-  workflow_dispatch: # Botón para ejecutar manual
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -15,18 +15,18 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Instalar dependencias
-        # El script usa: request, jsontoxml, moment, fs-extra, uuid
-        run: npm install request jsontoxml moment fs-extra uuid
+      - name: Instalar y Ejecutar
+        run: |
+          cd PlutoIPTV
+          npm install request jsontoxml moment fs-extra uuid
+          node index.js
+          mv playlist.m3u ../playlist.m3u
+          mv epg.xml ../epg.xml
 
-      - name: Generar Lista y EPG
-        run: node index.js
-        # El script por defecto genera 'playlist.m3u' y 'epg.xml' según tu código
-
-      - name: Guardar cambios
+      - name: Guardar Cambios
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add playlist.m3u epg.xml cache.json
-          git commit -m "Actualización automática Pluto CO" || exit 0
+          git add playlist.m3u epg.xml
+          git commit -m "Lista Pluto CO actualizada $(date)" || exit 0
           git push
