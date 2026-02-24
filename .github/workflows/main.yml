@@ -3,21 +3,21 @@ name: Actualizador PlutoIPTV Colombia
 on:
   schedule:
     - cron: '0 */3 * * *' # Se ejecuta cada 3 horas
-  workflow_dispatch:      # Permite ejecutarlo manualmente desde la pestaña Actions
+  workflow_dispatch:      # Permite ejecución manual
   push:
-    branches: [ main ]    # Se ejecuta al hacer cambios en la rama main
+    branches: [ main ]    # Se ejecuta si haces cambios en main
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write     # Permiso crucial para que la Action pueda subir archivos
+      contents: write
 
     steps:
       - name: Checkout del repositorio
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Trae todo el historial para evitar conflictos de git
+          fetch-depth: 0
 
       - name: Configurar Node.js
         uses: actions/setup-node@v4
@@ -29,27 +29,29 @@ jobs:
           cd PlutoIPTV
           npm install request jsontoxml moment fs-extra uuid
 
-      - name: Generar archivos
+      - name: Generar lista y EPG
         run: |
           cd PlutoIPTV
           node index.js
-          # Movemos y forzamos la actualización de la fecha de modificación
+          # Movemos solo los archivos necesarios a la raíz
           mv epg.xml ../
           mv playlist.m3u ../
-          mv playlist_hq.m3u ../
           cd ..
-          touch epg.xml playlist.m3u playlist_hq.m3u
+          # Forzamos la actualización de metadatos para que Git detecte el cambio
+          touch epg.xml playlist.m3u
 
       - name: Sincronizar y subir cambios
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           
-          # Añadimos los archivos específicamente
-          git add epg.xml playlist.m3u playlist_hq.m3u
+          # Añadimos los archivos actualizados
+          git add epg.xml playlist.m3u
           
-          # Hacemos el commit. Si no hay cambios, el "|| exit 0" evita que la acción falle
-          git commit -m "Actualización EPG y Listas: $(date)" || exit 0
-          
-          # Forzamos la subida para evitar conflictos de historial
-          git push origin main --force
+          # Hacemos commit si hay cambios. El '|| exit 0' evita que falle si no hay nada nuevo.
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Update Pluto Colombia: $(date)"
+            git push origin main --force
+          else
+            echo "No se detectaron cambios."
+          fi
