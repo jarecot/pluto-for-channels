@@ -9,7 +9,7 @@ const { v4: uuid4 } = require("uuid");
 
 const plutoIPTV = {
     grabJSON: function (callback) {
-        console.log("[INFO] Consultando API oficial de Pluto TV...");
+        console.log("[INFO] Consultando API de Pluto TV...");
         const startTime = moment().subtract(6, 'hours').format("YYYY-MM-DDTHH:00:00.000Z");
         const stopTime = moment().add(24, 'hours').format("YYYY-MM-DDTHH:00:00.000Z");
 
@@ -46,21 +46,22 @@ function processChannels(list) {
     list.forEach((channel) => {
         if (channel.isStitched && channel.slug) {
             
-            // Usamos el ID de Pluto como ID de canal, es el más estable
-            const idSincro = channel._id; 
-            const channelName = channel.name.replace(/[&]/g, 'y'); // Limpieza de caracteres
+            // ID DE VINCULACIÓN: Usamos el slug para que sea legible y estable
+            const idSincro = channel.slug; 
+            const channelName = channel.name.replace(/[&]/g, 'y');
             
-            let rawUrl = channel.stitched.urls[0].url;
+            // --- URL DE VIDEO (LIMPIA Y FUNCIONAL) ---
+            // Usamos el formato stitcher directo que ya te funcionó anteriormente
+            const videoUrl = `http://stitcher.pluto.tv/stitch/hls/channel/${channel._id}/master.m3u8?advertisingId=&appName=web&appVersion=unknown&appStoreUrl=&architecture=&buildVersion=&clientDeviceType=0&deviceDNT=0&deviceId=${idSincro}&deviceMake=web&deviceModel=web&deviceType=web&deviceVersion=unknown&sid=${uuid4()}&marketingName=web&sessionID=${uuid4()}`;
+
             let logoPath = channel.colorLogoPNG ? channel.colorLogoPNG.path : "";
             let finalLogo = logoPath.startsWith("http") ? logoPath : `${imgBase}${logoPath}`;
 
-            const finalLink = `${rawUrl}|User-Agent=${encodeURIComponent(ua)}`;
+            // M3U
+            m3u8 += `#EXTINF:0 tvg-id="${idSincro}" tvg-logo="${finalLogo}" group-title="${channel.category || 'Pluto TV'}", ${channelName}\n`;
+            m3u8 += `${videoUrl}\n\n`;
 
-            // M3U: Forzamos tvg-id para que el software no tenga duda
-            m3u8 += `#EXTINF:0 tvg-id="${idSincro}" tvg-name="${idSincro}" tvg-logo="${finalLogo}" group-title="${channel.category || 'Pluto TV'}", ${channelName}\n`;
-            m3u8 += `${finalLink}\n\n`;
-
-            // XMLTV: Definición de Canal
+            // EPG Canal
             tv.push({
                 name: "channel",
                 attrs: { id: idSincro },
@@ -70,12 +71,10 @@ function processChannels(list) {
                 ]
             });
 
-            // XMLTV: Programación
+            // EPG Programas
             if (channel.timelines && Array.isArray(channel.timelines)) {
                 channel.timelines.forEach((prog) => {
                     countProgs++;
-                    
-                    // Limpieza de textos para evitar que el XML se rompa
                     const title = (prog.title || "Sin título").replace(/[&]/g, 'y');
                     const desc = (prog.episode && prog.episode.description ? prog.episode.description : (prog.description || "Sin descripción")).replace(/[&]/g, 'y');
 
@@ -96,20 +95,13 @@ function processChannels(list) {
         }
     });
 
-    // Generar el cuerpo del XML
     const xmlBody = j2x(tv, { prettyPrint: true, escape: true });
-    
-    // CONSTRUCCIÓN MANUAL DEL CONTENEDOR RAIZ (Crucial para IPTVnator)
-    const finalXml = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE tv SYSTEM "xmltv.dtd">
-<tv generator-info-name="Gemini-Pluto-CO">
-${xmlBody}
-</tv>`;
+    const finalXml = `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE tv SYSTEM "xmltv.dtd">\n<tv generator-info-name="Gemini-Pluto-CO">\n${xmlBody}\n</tv>`;
 
     fs.writeFileSync("epg.xml", finalXml);
     fs.writeFileSync("playlist.m3u", m3u8);
     
-    console.log(`[SUCCESS] Sincronización completa: ${list.length} canales y ${countProgs} programas.`);
+    console.log(`[SUCCESS] Canales: ${list.length} | Programas: ${countProgs}`);
 }
 
 plutoIPTV.grabJSON(processChannels);
