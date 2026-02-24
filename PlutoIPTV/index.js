@@ -8,24 +8,45 @@ const { v4: uuid4 } = require("uuid");
 
 const plutoIPTV = {
   grabJSON: function (callback) {
-    console.log("[INFO] Solicitando canales y programas al Worker...");
-    // El Worker debe devolver el JSON completo incluyendo 'timelines'
-    const workerUrl = `https://floral-salad-5e9d.zinhoflix.workers.dev/`;
+    console.log("[INFO] Consultando directamente a la API de Pluto TV (Región: CO)...");
+
+    // Ventana de tiempo: 2 horas atrás y 12 hacia adelante para asegurar EPG poblado
+    const startTime = moment().subtract(2, 'hours').format("YYYY-MM-DDTHH:00:00.000Z");
+    const stopTime = moment().add(12, 'hours').format("YYYY-MM-DDTHH:00:00.000Z");
+
+    const params = new URLSearchParams({
+        start: startTime,
+        stop: stopTime,
+        region: "CO", // Forzamos Colombia
+        appName: "web",
+        appVersion: "5.33.0",
+        deviceType: "web",
+        deviceMake: "chrome",
+        deviceModel: "chrome",
+        sid: uuid4(),
+        deviceId: uuid4()
+    });
+
+    const apiUrl = `https://api.pluto.tv/v2/channels?${params.toString()}`;
 
     request({
-      url: workerUrl,
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      timeout: 30000 // Aumentamos el tiempo de espera a 30 seg
+      url: apiUrl,
+      headers: { 
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        // ESTA LÍNEA ES CLAVE: Simula que la petición viene de una IP colombiana
+        'X-Forwarded-For': '181.128.0.0' 
+      },
+      timeout: 30000
     }, function (err, res, raw) {
       if (err) {
-        console.error("[ERROR] No se pudo conectar con el Worker:", err.message);
+        console.error("[ERROR] No se pudo conectar a la API:", err.message);
         process.exit(1);
       }
       try {
         const data = JSON.parse(raw);
         callback(data);
       } catch (e) {
-        console.error("[ERROR] La respuesta del Worker no es un JSON válido.");
+        console.error("[ERROR] Pluto TV no devolvió JSON. Posible bloqueo regional.");
         process.exit(1);
       }
     });
@@ -33,11 +54,6 @@ const plutoIPTV = {
 };
 
 function processChannels(list) {
-  if (!Array.isArray(list)) {
-    console.error("[ERROR] La lista de canales no es un array.");
-    process.exit(1);
-  }
-
   const imgBase = "https://images.pluto.tv";
   const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
   
@@ -46,27 +62,27 @@ function processChannels(list) {
   let countProgs = 0;
 
   list.forEach((channel) => {
-    // Verificamos que sea un canal válido y tenga slug
-    if (channel.slug && !channel.slug.match(/^announcement|^privacy-policy/)) {
+    // Solo canales con streaming y evitar anuncios
+    if (channel.isStitched && channel.slug && !channel.slug.match(/^announcement|^privacy-policy/)) {
       
-      const idSincro = channel.slug; // Usamos slug para máxima compatibilidad
-      let rawUrl = (channel.stitched && channel.stitched.urls) ? channel.stitched.urls[0].url : "";
-      
-      if (!rawUrl) return; // Si no hay URL de streaming, saltar
-
-      let logoPath = (channel.colorLogoPNG && channel.colorLogoPNG.path) ? channel.colorLogoPNG.path : "";
+      const idSincro = channel.slug;
+      let rawUrl = channel.stitched.urls[0].url;
+      let logoPath = channel.colorLogoPNG ? channel.colorLogoPNG.path : "";
       let finalLogo = logoPath.startsWith("http") ? logoPath : `${imgBase}${logoPath}`;
 
-      // Configuración de URL (Cabeceras que funcionan)
+      // Configuración de URL para máxima calidad
       let urlObj = new URL(rawUrl);
       urlObj.searchParams.set("sid", uuid4());
       urlObj.searchParams.set("deviceId", idSincro);
+      urlObj.searchParams.set("appName", "web");
+      urlObj.searchParams.set("deviceMake", "chrome");
+      
       const finalLink = `${urlObj.toString()}|User-Agent=${encodeURIComponent(ua)}`;
 
       m3u8 += `#EXTINF:0 tvg-id="${idSincro}" tvg-name="${channel.name}" tvg-logo="${finalLogo}" group-title="${channel.category || 'Pluto TV'}", ${channel.name}\n`;
       m3u8 += `${finalLink}\n\n`;
 
-      // EPG: Datos del Canal
+      // EPG Canal
       tv.push({
         name: "channel",
         attrs: { id: idSincro },
@@ -76,12 +92,9 @@ function processChannels(list) {
         ]
       });
 
-      // EPG: Datos de Programación (CORRECCIÓN AQUÍ)
-      // Revisamos 'timelines' o 'programs' según lo que devuelva el worker
-      const programas = channel.timelines || channel.programs || [];
-
-      if (programas.length > 0) {
-        programas.forEach((prog) => {
+      // EPG Programas (Aquí es donde la API directa SI entrega datos)
+      if (channel.timelines && channel.timelines.length > 0) {
+        channel.timelines.forEach((prog) => {
           countProgs++;
           tv.push({
             name: "programme",
@@ -92,7 +105,7 @@ function processChannels(list) {
             },
             children: [
               { name: "title", attrs: { lang: "es" }, text: prog.title || "Sin título" },
-              { name: "desc", attrs: { lang: "es" }, text: (prog.episode && prog.episode.description) ? prog.episode.description : (prog.description || "Sin descripción") }
+              { name: "desc", attrs: { lang: "es" }, text: (prog.episode && prog.episode.description) ? prog.episode.description : "Sin descripción" }
             ]
           });
         });
@@ -100,19 +113,13 @@ function processChannels(list) {
     }
   });
 
-  // Si después de todo el loop no hay programas, avisar
-  if (countProgs === 0) {
-    console.warn("[WARN] No se encontraron programas en el JSON del Worker.");
-  }
-
-  // Generación del XML final
   const xmlContents = j2x({ tv }, { prettyPrint: true, escape: true });
   const finalXml = `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE tv SYSTEM "xmltv.dtd">\n${xmlContents}`;
 
   fs.writeFileSync("epg.xml", finalXml);
   fs.writeFileSync("playlist.m3u", m3u8);
   
-  console.log(`[SUCCESS] Canales procesados: ${list.length}`);
+  console.log(`[SUCCESS] Canales: ${list.length}`);
   console.log(`[SUCCESS] Programas encontrados: ${countProgs}`);
 }
 
